@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pangram Sentence Builder & Checker</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @keyframes celebrate {
+    0%{transform:scale(1)} 25%{transform:scale(1.05)} 50%{transform:scale(1)} 75%{transform:scale(1.03)} 100%{transform:scale(1)}
+  }
+  .celebrate { animation: celebrate 0.5s ease; }
+  @keyframes confetti-fall {
+    0%{transform:translateY(-10px) rotate(0deg);opacity:1}
+    100%{transform:translateY(100px) rotate(360deg);opacity:0}
+  }
+  .confetti-piece { animation: confetti-fall 1s ease forwards; position:absolute; font-size:1.5rem; }
+</style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen p-4">
+<script>
+function escapeHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+</script>
+
+<div class="max-w-3xl mx-auto">
+  <h1 class="text-3xl font-bold text-center mb-1 text-yellow-400">Pangram Sentence Builder</h1>
+  <p class="text-center text-gray-400 mb-6 text-sm">26文字全てを含む文を作ろう！</p>
+
+  <div class="grid md:grid-cols-3 gap-4">
+    <!-- Main Area -->
+    <div class="md:col-span-2 space-y-4">
+      <!-- Letter Grid -->
+      <div class="bg-gray-900 rounded-xl p-4 border border-gray-700">
+        <div class="flex justify-between items-center mb-3">
+          <h2 class="text-sm font-semibold text-gray-300">Alphabet Status</h2>
+          <div id="counterBadge" class="text-sm font-bold px-3 py-1 rounded-full bg-red-900 text-red-300">26 remaining</div>
+        </div>
+        <div class="grid grid-cols-13 gap-1.5" id="letterGrid" style="grid-template-columns:repeat(13,1fr)">
+        </div>
+      </div>
+
+      <!-- Input -->
+      <div class="bg-gray-900 rounded-xl p-4 border border-gray-700 relative" id="inputCard">
+        <div class="flex justify-between items-center mb-2">
+          <label class="text-sm font-semibold text-gray-300">Your Sentence</label>
+          <div class="flex gap-2 text-xs text-gray-500" id="stats"></div>
+        </div>
+        <textarea id="sentenceInput" rows="4"
+          class="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-base text-gray-100 focus:outline-none focus:border-yellow-500 resize-none font-medium leading-relaxed"
+          placeholder="Start typing your pangram..."></textarea>
+        <div class="flex gap-2 mt-2">
+          <button onclick="clearInput()" class="px-4 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-sm transition-colors">Clear</button>
+        </div>
+        <!-- Celebration overlay -->
+        <div id="celebrationOverlay" class="hidden absolute inset-0 bg-yellow-500/10 rounded-xl flex items-center justify-center pointer-events-none overflow-hidden">
+        </div>
+      </div>
+
+      <!-- Success Banner -->
+      <div id="successBanner" class="hidden bg-gradient-to-r from-yellow-900 to-green-900 border border-yellow-600 rounded-xl p-4 text-center">
+        <div class="text-2xl mb-1">🎉</div>
+        <div class="text-yellow-400 font-bold text-lg">Perfect Pangram!</div>
+        <div class="text-gray-300 text-sm mt-1" id="successStats"></div>
+      </div>
+    </div>
+
+    <!-- Sidebar: Famous Pangrams -->
+    <div class="bg-gray-900 rounded-xl p-4 border border-gray-700">
+      <h2 class="text-sm font-semibold text-gray-300 mb-3">Famous Pangrams</h2>
+      <div class="space-y-2">
+      </div>
+      <div id="famousList" class="space-y-2"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const FAMOUS_PANGRAMS = [
+  { text:"The quick brown fox jumps over the lazy dog", note:"Classic" },
+  { text:"Pack my box with five dozen liquor jugs", note:"Short" },
+  { text:"How vexingly quick daft zebras jump!", note:"Lively" },
+  { text:"The five boxing wizards jump quickly", note:"35 chars" },
+  { text:"Sphinx of black quartz, judge my vow", note:"Poetic" },
+  { text:"Jackdaws love my big sphinx of quartz", note:"Natural" },
+  { text:"Fix problem quickly with galvanized jets", note:"Technical" },
+  { text:"Crazy Fredrick bought many very exquisite opal jewels", note:"Long" },
+];
+
+const ALPHABET = 'abcdefghijklmnopqrstuvwxyz';
+
+// Build letter grid
+const grid = document.getElementById('letterGrid');
+ALPHABET.split('').forEach(l => {
+  const el = document.createElement('div');
+  el.id = 'letter_' + l;
+  el.className = 'flex items-center justify-center h-8 rounded-md text-sm font-bold font-mono transition-all bg-red-900/60 text-red-400 border border-red-800/50';
+  el.textContent = l.toUpperCase();
+  grid.appendChild(el);
+});
+
+// Famous pangrams
+const fl = document.getElementById('famousList');
+FAMOUS_PANGRAMS.forEach(p => {
+  const div = document.createElement('div');
+  div.className = 'cursor-pointer bg-gray-800 hover:bg-gray-700 rounded-lg p-2.5 border border-gray-700 hover:border-yellow-600 transition-colors';
+  div.onclick = () => { document.getElementById('sentenceInput').value = p.text; updateStatus(); };
+  div.innerHTML = `<div class="text-xs text-gray-200 leading-snug">${escapeHtml(p.text)}</div><div class="text-xs text-yellow-600 mt-1">${escapeHtml(p.note)}</div>`;
+  fl.appendChild(div);
+});
+
+let wasPangram = false;
+
+function updateStatus() {
+  const text = document.getElementById('sentenceInput').value.toLowerCase();
+  const used = new Set();
+  for (const ch of text) {
+    if (ALPHABET.includes(ch)) used.add(ch);
+  }
+
+  let remaining = 0;
+  ALPHABET.split('').forEach(l => {
+    const el = document.getElementById('letter_' + l);
+    if (used.has(l)) {
+      el.className = 'flex items-center justify-center h-8 rounded-md text-sm font-bold font-mono transition-all bg-green-800 text-green-300 border border-green-600 scale-105';
+    } else {
+      remaining++;
+      el.className = 'flex items-center justify-center h-8 rounded-md text-sm font-bold font-mono transition-all bg-red-900/60 text-red-400 border border-red-800/50';
+    }
+  });
+
+  const badge = document.getElementById('counterBadge');
+  if (remaining === 0) {
+    badge.className = 'text-sm font-bold px-3 py-1 rounded-full bg-green-800 text-green-300';
+    badge.textContent = '✓ Complete!';
+  } else {
+    badge.className = 'text-sm font-bold px-3 py-1 rounded-full bg-red-900 text-red-300';
+    badge.textContent = remaining + ' remaining';
+  }
+
+  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  const chars = text.replace(/\s/g,'').length;
+  document.getElementById('stats').innerHTML =
+    `<span>${escapeHtml(String(words))} words</span><span class="mx-1">·</span><span>${escapeHtml(String(text.length))} chars</span>`;
+
+  const isPangram = remaining === 0 && text.trim().length > 0;
+  const successBanner = document.getElementById('successBanner');
+  if (isPangram) {
+    successBanner.classList.remove('hidden');
+    document.getElementById('successStats').textContent = `${words} words · ${text.length} characters · ${used.size} unique letters`;
+    if (!wasPangram) triggerCelebration();
+  } else {
+    successBanner.classList.add('hidden');
+  }
+  wasPangram = isPangram;
+}
+
+function triggerCelebration() {
+  const overlay = document.getElementById('celebrationOverlay');
+  overlay.innerHTML = '';
+  overlay.classList.remove('hidden');
+  const emojis = ['🎉','⭐','🌟','✨','🎊','🏆','🎯'];
+  for (let i=0; i<12; i++) {
+    const span = document.createElement('span');
+    span.className = 'confetti-piece';
+    span.style.left = Math.random()*90 + '%';
+    span.style.top = Math.random()*20 + '%';
+    span.style.animationDelay = (Math.random()*0.5) + 's';
+    span.textContent = emojis[Math.floor(Math.random()*emojis.length)];
+    overlay.appendChild(span);
+  }
+  setTimeout(() => overlay.classList.add('hidden'), 1500);
+  document.getElementById('inputCard').classList.add('celebrate');
+  setTimeout(() => document.getElementById('inputCard').classList.remove('celebrate'), 500);
+}
+
+function clearInput() {
+  document.getElementById('sentenceInput').value = '';
+  updateStatus();
+}
+
+document.getElementById('sentenceInput').addEventListener('input', updateStatus);
+updateStatus();
+</script>
+</body>
+</html>
